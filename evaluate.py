@@ -26,7 +26,7 @@ def restore(args):
     )
 
     input_vocab_size = tokenizer_source.vocab_size + 2
-    target_vocab_size = tokenizer_target.vocab_size + 2
+    target_vocab_size = tokenizer_target.num_classes
 
     learning_rate = CustomSchedule(args.d_model)
     optimizer = tf.keras.optimizers.Adam(

@@ -143,7 +143,7 @@ def train(args):
     logger.info("Setup Checkpoints: {}".format(params["checkpoint_path"]))
     ckpt = tf.train.Checkpoint(transformer=transformer, optimizer=optimizer)
     ckpt_manager = tf.train.CheckpointManager(
-        ckpt, params["checkpoint_path"], max_to_keep=2
+        ckpt, params["checkpoint_path"], max_to_keep=1
     )
 
     # if a checkpoint exists, restore the latest checkpoint.
