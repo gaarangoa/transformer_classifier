@@ -7,7 +7,7 @@ stdout_handler = logging.StreamHandler(sys.stdout)
 handlers = [stdout_handler]
 
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.ERROR,
     format="[%(asctime)s] %(levelname)s - %(message)s",
     handlers=handlers,
 )
@@ -91,7 +91,7 @@ def train(args):
     sample_string = "".join(sample_string)
 
     tokenized_string = tokenizer_source.encode(sample_string)
-    sample_class = tokenizer_target.decode_example(example_entry[1][0].numpy())
+    sample_class = tokenizer_target.int2str(example_entry[1][0].numpy())
     tokenized_class = tokenizer_target.encode_example(sample_class)
 
     logger.debug("sample string: {}".format(sample_string))

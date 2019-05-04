@@ -82,7 +82,7 @@ def evaluate(inp_sentence, params):
     predictions = predictions.numpy()[predictions_index.numpy()]
 
     _pred = [
-        {"score": i, "label": tokenizer_target.decode_example(j.numpy()).numpy()}
+        {"score": i, "label": tokenizer_target.int2str(j.numpy())}
         for i, j in zip(predictions, predictions_index)
     ][: params["max_predictions"]]
 
