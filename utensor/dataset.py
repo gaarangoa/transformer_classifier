@@ -189,13 +189,13 @@ def load_dataset(params={}):
     train_dataset = train_dataset.filter(dataset.filter_max_length)
     # train_dataset = train_dataset.cache()
     train_dataset = train_dataset.shuffle(BUFFER_SIZE).padded_batch(
-        BATCH_SIZE, padded_shapes=([MAX_LENGTH], [])
+        BATCH_SIZE, padded_shapes=([MAX_LENGTH], [1])
     )
     train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
     val_dataset = val_examples.map(dataset.tf_encode)
     val_dataset = val_dataset.filter(dataset.filter_max_length).padded_batch(
-        BATCH_SIZE, padded_shapes=([MAX_LENGTH], [])
+        BATCH_SIZE, padded_shapes=([MAX_LENGTH], [1])
     )
     # val_dataset = val_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
