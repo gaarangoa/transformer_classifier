@@ -16,35 +16,37 @@ import json
 tf.keras.backend.clear_session()
 
 
-def restore(args):
+def restore(params):
     # loading tokenizers for future predictions
     tokenizer_source = pickle.load(
-        open(args.checkpoint_path + "tokenizer_source.pickle", "rb")
+        open(params["checkpoint_path"] + "tokenizer_source.pickle", "rb")
     )
     tokenizer_target = pickle.load(
-        open(args.checkpoint_path + "tokenizer_target.pickle", "rb")
+        open(params["checkpoint_path"] + "tokenizer_target.pickle", "rb")
     )
 
     input_vocab_size = tokenizer_source.vocab_size + 2
     target_vocab_size = tokenizer_target.num_classes
 
-    learning_rate = CustomSchedule(args.d_model)
+    learning_rate = CustomSchedule(params["d_model"])
     optimizer = tf.keras.optimizers.Adam(
         learning_rate, beta_1=0.9, beta_2=0.98, epsilon=1e-9
     )
 
     transformer = Transformer(
-        args.num_layers,
-        args.d_model,
-        args.num_heads,
-        args.dff,
+        params["num_layers"],
+        params["d_model"],
+        params["num_heads"],
+        params["dff"],
         input_vocab_size,
         target_vocab_size,
-        args.dropout_rate,
+        params["dropout_rate"],
     )
 
     ckpt = tf.train.Checkpoint(transformer=transformer, optimizer=optimizer)
-    ckpt_manager = tf.train.CheckpointManager(ckpt, args.checkpoint_path, max_to_keep=1)
+    ckpt_manager = tf.train.CheckpointManager(
+        ckpt, params["checkpoint_path"], max_to_keep=1
+    )
 
     # if a checkpoint exists, restore the latest checkpoint.
     if ckpt_manager.latest_checkpoint:
@@ -56,65 +58,48 @@ def restore(args):
     return transformer, tokenizer_source, tokenizer_target
 
 
-def evaluate(inp_sentence, args):
+def evaluate(inp_sentence, params):
     start_token = [tokenizer_source.vocab_size]
     end_token = [tokenizer_source.vocab_size + 1]
 
-    # inp sentence is portuguese, hence adding the start and end token
-    inp_sentence = start_token + tokenizer_source.encode(inp_sentence) + end_token
-    encoder_input = tf.expand_dims(inp_sentence, 0)
+    inp = [start_token + tokenizer_source.encode(inp_sentence) + end_token]
+    inp = tf.keras.preprocessing.sequence.pad_sequences(
+        inp, maxlen=params["MAX_LENGTH"], padding="post"
+    )
+    # inp = tf.expand_dims(inp, 0)
+    enc_padding_mask = create_masks(inp, None)
 
-    # as the target is english, the first word to the transformer should be the
-    # english start token.
-    decoder_input = [tokenizer_target.vocab_size]
-    output = tf.expand_dims(decoder_input, 0)
-
-    for i in range(args.MAX_LENGTH):
-        enc_padding_mask, combined_mask, dec_padding_mask = create_masks(
-            encoder_input, output
-        )
-
-        # predictions.shape == (batch_size, seq_len, vocab_size)
-        predictions, attention_weights = transformer(
-            encoder_input,
-            output,
-            False,
-            enc_padding_mask,
-            combined_mask,
-            dec_padding_mask,
-        )
-
-        # select the last word from the seq_len dimension
-        predictions = predictions[:, -1:, :]  # (batch_size, 1, vocab_size)
-
-        predicted_id = tf.cast(tf.argmax(predictions, axis=-1), tf.int32)
-
-        # return the result if the predicted_id is equal to the end token
-        if tf.equal(predicted_id, tokenizer_target.vocab_size + 1):
-            return tf.squeeze(output, axis=0), attention_weights
-
-        # concatentate the predicted_id to the output which is given to the decoder
-        # as its input.
-        output = tf.concat([output, predicted_id], axis=-1)
-
-    return tf.squeeze(output, axis=0), attention_weights
-
-
-def translate(sentence, args):
-    result, attention_weights = evaluate(sentence, args)
-
-    predicted_sentence = tokenizer_target.decode(
-        [i for i in result if i < tokenizer_target.vocab_size]
+    # predictions.shape == (batch_size, seq_len, vocab_size)
+    predictions, _, attention_weights = transformer(
+        inp, None, False, enc_padding_mask, None, None
     )
 
-    print("Pregunta: {}".format(sentence))
-    print("Respuesta UmyBot: {}".format(predicted_sentence))
+    predictions = tf.squeeze(predictions, axis=0)
+    predictions_index = tf.cast(
+        tf.argsort(predictions, axis=-1, direction="DESCENDING"), tf.int32
+    )
+
+    predictions = predictions.numpy()[predictions_index.numpy()]
+
+    _pred = [
+        {"score": i, "label": tokenizer_target.decode_example(j.numpy()).numpy()}
+        for i, j in zip(predictions, predictions_index)
+    ][: params["max_predictions"]]
+
+    return _pred, attention_weights
+
+
+def translate(sentence, params):
+    predictions, _ = evaluate(sentence, params)
+    print("Input: {}".format(sentence))
+    print("predictions: {}".format(predictions))
 
 
 def get_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_file", type=str, required=True)
     parser.add_argument("--checkpoint_path", type=str, required=True)
+    parser.add_argument("--max_predictions", type=int, default=5, required=False)
 
     return parser
 
@@ -122,6 +107,12 @@ def get_parser():
 if __name__ == "__main__":
     args = get_parser().parse_args()
     params = json.load(open(args.checkpoint_path + "/params.json"))
-    transformer, tokenizer_source, tokenizer_target = restore(args)
-    translate("me pueden ayudar?", args)
+    params["checkpoint_path"] = args.checkpoint_path
+    params["input_file"] = args.input_file
+    params["max_predictions"] = args.max_predictions
+    transformer, tokenizer_source, tokenizer_target = restore(params)
+
+    while 1:
+        sentence = input()
+        translate(sentence, params)
 

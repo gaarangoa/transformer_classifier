@@ -7,7 +7,7 @@ stdout_handler = logging.StreamHandler(sys.stdout)
 handlers = [stdout_handler]
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="[%(asctime)s] %(levelname)s - %(message)s",
     handlers=handlers,
 )
@@ -235,20 +235,78 @@ def train(args):
 
 def get_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--MAX_LENGTH", type=int, default=40, help="maximum length of the input text sentences")
-    parser.add_argument("--BUFFER_SIZE", type=int, default=5000, help="buffer size for training")
-    parser.add_argument("--BATCH_SIZE", type=int, default=32, help="batch size to use for training (min batch)")
-    parser.add_argument("--EPOCHS", type=int, default=100, help="number of epochs to train the model")
-    parser.add_argument("--num_heads", default=8, type=int, help='transformer: Number of attention heads')
-    parser.add_argument("--num_layers", default=4, type=int, help='transformer: number of encoder units')
-    parser.add_argument("--d_model", default=64, type=int, help='transformer: embedding dimension of the model')
-    parser.add_argument("--dff", default=264, type=int, help='transformer: placeholder dimension for normalization')
-    parser.add_argument("--vocab_dim", default=10000, type=int, help='transformer: maximum vocabulary size')
-    parser.add_argument("--dropout_rate", default=0.1, type=float, help='transformer: dropout rate for training')
-    parser.add_argument("--test_partition", default=0.2, type=float, help='slice of data for testing')
-    parser.add_argument("--dataset_file", type=str, required=True, help='input tsv dataset with two columns: sentence -> class')
-    parser.add_argument("--checkpoint_path", type=str, required=True, help='checkpoint where to save the model')
-    parser.add_argument("--retrain", default=False, action="store_true", help='if retraining the model, start from previous stored model')
+    parser.add_argument(
+        "--MAX_LENGTH",
+        type=int,
+        default=40,
+        help="maximum length of the input text sentences",
+    )
+    parser.add_argument(
+        "--BUFFER_SIZE", type=int, default=5000, help="buffer size for training"
+    )
+    parser.add_argument(
+        "--BATCH_SIZE",
+        type=int,
+        default=32,
+        help="batch size to use for training (min batch)",
+    )
+    parser.add_argument(
+        "--EPOCHS", type=int, default=100, help="number of epochs to train the model"
+    )
+    parser.add_argument(
+        "--num_heads",
+        default=8,
+        type=int,
+        help="transformer: Number of attention heads",
+    )
+    parser.add_argument(
+        "--num_layers", default=4, type=int, help="transformer: number of encoder units"
+    )
+    parser.add_argument(
+        "--d_model",
+        default=64,
+        type=int,
+        help="transformer: embedding dimension of the model",
+    )
+    parser.add_argument(
+        "--dff",
+        default=264,
+        type=int,
+        help="transformer: placeholder dimension for normalization",
+    )
+    parser.add_argument(
+        "--vocab_dim",
+        default=10000,
+        type=int,
+        help="transformer: maximum vocabulary size",
+    )
+    parser.add_argument(
+        "--dropout_rate",
+        default=0.1,
+        type=float,
+        help="transformer: dropout rate for training",
+    )
+    parser.add_argument(
+        "--test_partition", default=0.2, type=float, help="slice of data for testing"
+    )
+    parser.add_argument(
+        "--dataset_file",
+        type=str,
+        required=True,
+        help="input tsv dataset with two columns: sentence -> class",
+    )
+    parser.add_argument(
+        "--checkpoint_path",
+        type=str,
+        required=True,
+        help="checkpoint where to save the model",
+    )
+    parser.add_argument(
+        "--retrain",
+        default=False,
+        action="store_true",
+        help="if retraining the model, start from previous stored model",
+    )
 
     return parser
 
