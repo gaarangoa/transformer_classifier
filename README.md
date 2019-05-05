@@ -58,5 +58,5 @@ This repository includes a colab notebook for training:
 * Enjoy!
 
 ### Contact
-www.umayuxlabs.com
-info@umayuxlabs.com
+* www.umayuxlabs.com
+* info@umayuxlabs.com
