@@ -39,3 +39,14 @@ To run the container and make predictions in the command line use:
                         --checkpoint_path CHECKPOINT_PATH
                         --retrain
 
+### REST API USAGE
+
+This repository has a simple flask api wrapped into a docker container that can be used to make predictions. After training and after running docker-compse up you will get an API exposed on the port 65431
+
+You can run the next CURL request to check it: 
+
+        curl -X POST http://localhost:65431/predict/ \
+                -d'{"sentence": "hola, buenos dias", "max_predictions": 5, "attention": false, "layer": 4, "block": 1}' \
+                -H "Content-Type: application/json"
+
+
