@@ -1,167 +1,98 @@
+import argparse
 import tensorflow_datasets as tfds
 import tensorflow as tf
-import utensor.dataset as dt
+
 from utensor.optimizer import CustomSchedule, loss_function
+from utensor.dataset import Dataset
 from utensor.model import Transformer
-import time
+from utensor.dataset import load_dataset
 from utensor.masking import create_masks
 import pickle
-import matplotlib.pyplot as plt
+from sklearn.metrics import classification_report
+import time
+import os
+import json
+
+tf.keras.backend.clear_session()
 
 
-class Model:
-    def __init__(self):
-        pass
+def restore(params):
+    # loading tokenizers for future predictions
+    tokenizer_source = pickle.load(
+        open(params["checkpoint_path"] + "tokenizer_source.pickle", "rb")
+    )
+    tokenizer_target = pickle.load(
+        open(params["checkpoint_path"] + "tokenizer_target.pickle", "rb")
+    )
 
-    def load(
-        self,
-        MAX_LENGTH=120,
-        num_heads=8,
-        num_layers=4,
-        d_model=64,
-        dff=264,
-        dropout_rate=0.1,
-        checkpoint_path="/src/data/",
-        beta_1=0.9,
-        beta_2=0.98,
-        epsilon=1e-9,
-    ):
+    input_vocab_size = tokenizer_source.vocab_size + 2
+    target_vocab_size = tokenizer_target.num_classes
 
-        self.MAX_LENGTH = MAX_LENGTH
+    learning_rate = CustomSchedule(params["d_model"])
+    optimizer = tf.keras.optimizers.Adam(
+        learning_rate, beta_1=0.9, beta_2=0.98, epsilon=1e-9
+    )
 
-        # loading tokenizers for future predictions
-        self.tokenizer_source = pickle.load(
-            open(checkpoint_path + "/tokenizer_source.pickle", "rb")
-        )
-        self.tokenizer_target = pickle.load(
-            open(checkpoint_path + "/tokenizer_target.pickle", "rb")
-        )
+    transformer = Transformer(
+        params["num_layers"],
+        params["d_model"],
+        params["num_heads"],
+        params["dff"],
+        input_vocab_size,
+        target_vocab_size,
+        params["dropout_rate"],
+    )
 
-        input_vocab_size = self.tokenizer_source.vocab_size + 2
-        target_vocab_size = self.tokenizer_target.vocab_size + 2
+    ckpt = tf.train.Checkpoint(transformer=transformer, optimizer=optimizer)
+    ckpt_manager = tf.train.CheckpointManager(
+        ckpt, params["checkpoint_path"], max_to_keep=1
+    )
 
-        learning_rate = CustomSchedule(d_model)
-        self.optimizer = tf.keras.optimizers.Adam(
-            learning_rate, beta_1=beta_1, beta_2=beta_2, epsilon=epsilon
-        )
+    # if a checkpoint exists, restore the latest checkpoint.
+    if ckpt_manager.latest_checkpoint:
+        ckpt.restore(ckpt_manager.latest_checkpoint)
+        print("Latest checkpoint restored!!")
+    else:
+        print("Initializing from scratch.")
 
-        self.transformer = Transformer(
-            num_layers,
-            d_model,
-            num_heads,
-            dff,
-            input_vocab_size,
-            target_vocab_size,
-            dropout_rate,
-        )
+    return transformer, tokenizer_source, tokenizer_target
 
-        ckpt = tf.train.Checkpoint(
-            transformer=self.transformer, optimizer=self.optimizer
-        )
-        ckpt_manager = tf.train.CheckpointManager(ckpt, checkpoint_path, max_to_keep=5)
 
-        # if a checkpoint exists, restore the latest checkpoint.
-        if ckpt_manager.latest_checkpoint:
-            ckpt.restore(ckpt_manager.latest_checkpoint)
-            print("Latest checkpoint restored!!")
-        else:
-            print("Initializing from scratch.")
+def evaluate(inp_sentence, params, tokenizer_source, tokenizer_target, transformer):
+    start_token = [tokenizer_source.vocab_size]
+    end_token = [tokenizer_source.vocab_size + 1]
 
-    def evaluate(self, inp_sentence):
-        start_token = [self.tokenizer_source.vocab_size]
-        end_token = [self.tokenizer_source.vocab_size + 1]
+    inp = [start_token + tokenizer_source.encode(inp_sentence) + end_token]
+    inp = tf.keras.preprocessing.sequence.pad_sequences(
+        inp, maxlen=params["MAX_LENGTH"], padding="post"
+    )
+    # inp = tf.expand_dims(inp, 0)
+    enc_padding_mask = create_masks(inp, None)
 
-        # inp sentence is portuguese, hence adding the start and end token
-        inp_sentence = (
-            start_token + self.tokenizer_source.encode(inp_sentence) + end_token
-        )
-        encoder_input = tf.expand_dims(inp_sentence, 0)
+    # predictions.shape == (batch_size, seq_len, vocab_size)
+    predictions, _, attention_weights = transformer(
+        inp, None, False, enc_padding_mask, None, None
+    )
 
-        # as the target is english, the first word to the transformer should be the
-        # english start token.
-        decoder_input = [self.tokenizer_target.vocab_size]
-        output = tf.expand_dims(decoder_input, 0)
+    predictions = tf.squeeze(predictions, axis=0)
+    predictions_index = tf.cast(
+        tf.argsort(predictions, axis=-1, direction="DESCENDING"), tf.int32
+    )
 
-        for i in range(self.MAX_LENGTH):
-            enc_padding_mask, combined_mask, dec_padding_mask = create_masks(
-                encoder_input, output
-            )
+    predictions = predictions.numpy()[predictions_index.numpy()]
 
-        # predictions.shape == (batch_size, seq_len, vocab_size)
-        predictions, attention_weights = self.transformer(
-            encoder_input,
-            output,
-            False,
-            enc_padding_mask,
-            combined_mask,
-            dec_padding_mask,
-        )
+    _pred = [
+        {"score": i, "label": tokenizer_target.int2str(j.numpy())}
+        for i, j in zip(predictions, predictions_index)
+    ][: params["max_predictions"]]
 
-        # select the last word from the seq_len dimension
-        predictions = predictions[:, -1:, :]  # (batch_size, 1, vocab_size)
+    return _pred, attention_weights
 
-        predicted_id = tf.cast(tf.argmax(predictions, axis=-1), tf.int32)
 
-        # return the result if the predicted_id is equal to the end token
-        if tf.equal(predicted_id, self.tokenizer_target.vocab_size + 1):
-            return tf.squeeze(output, axis=0), attention_weights
-
-        # concatentate the predicted_id to the output which is given to the decoder
-        # as its input.
-        output = tf.concat([output, predicted_id], axis=-1)
-
-        return tf.squeeze(output, axis=0), attention_weights
-
-    def plot_attention_weights(self, attention, sentence, result, layer):
-        fig = plt.figure(figsize=(30, 38))
-
-        sentence = self.tokenizer_source.encode(sentence)
-
-        attention = tf.squeeze(attention[layer], axis=0)
-
-        for head in range(attention.shape[0]):
-            ax = fig.add_subplot(8, 1, head + 1)
-
-        # plot the attention weights
-        ax.matshow(attention[head][:-1, :], cmap="viridis")
-
-        fontdict = {"fontsize": 10}
-
-        ax.set_xticks(range(len(sentence) + 2))
-        ax.set_yticks(range(len(result)))
-
-        ax.set_ylim(len(result) - 1.5, -0.5)
-
-        ax.set_xticklabels(
-            ["<start>"]
-            + [self.tokenizer_source.decode([i]) for i in sentence]
-            + ["<end>"],
-            fontdict=fontdict,
-            rotation=90,
-        )
-
-        ax.set_yticklabels(
-            [
-                self.tokenizer_target.decode([i])
-                for i in result
-                if i < self.tokenizer_target.vocab_size
-            ],
-            fontdict=fontdict,
-        )
-
-        ax.set_xlabel("Head {}".format(head + 1))
-
-        plt.tight_layout()
-        plt.show()
-
-    def query(self, sentence, plot=""):
-        result, attention_weights = self.evaluate(sentence)
-
-        predicted_sentence = self.tokenizer_target.decode(
-            [i for i in result if i < self.tokenizer_target.vocab_size]
-        )
-
-        if plot:
-            self.plot_attention_weights(attention_weights, sentence, result, plot)
-
-        return predicted_sentence
+def translate(sentence, params, tokenizer_source, tokenizer_target, transformer):
+    predictions, attention = evaluate(
+        sentence, params, tokenizer_source, tokenizer_target, transformer
+    )
+    print("Input: {}".format(sentence))
+    print("predictions: {}".format(predictions))
+    return predictions, attention

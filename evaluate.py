@@ -97,7 +97,7 @@ def translate(sentence, params):
 
 def get_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_file", type=str, required=True)
+    parser.add_argument("--input_file", type=str, required=False)
     parser.add_argument("--checkpoint_path", type=str, required=True)
     parser.add_argument("--max_predictions", type=int, default=5, required=False)
 
