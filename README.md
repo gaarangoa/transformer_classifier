@@ -50,3 +50,14 @@ You can run the next CURL request to check it:
                 -H "Content-Type: application/json"
 
 
+### TRAINING on COLAB
+This repository includes a colab notebook for training: 
+* You need to create a ./data/ directory under the repository directory
+* The input data has to be a tab (\t) delimited file where the first column is the text input and the second column is the class label. 
+* Follow the instructions on the colab notebook to perform the training and testing. 
+* Enjoy!
+
+### Contact
+
+www.umayuxlabs.com
+info@umayuxlabs.com
