@@ -82,7 +82,7 @@ def evaluate(inp_sentence, params, tokenizer_source, tokenizer_target, transform
     predictions = predictions.numpy()[predictions_index.numpy()]
 
     _pred = [
-        {"score": i, "label": tokenizer_target.int2str(j.numpy())}
+        {"score": float(i), "label": tokenizer_target.int2str(j.numpy())}
         for i, j in zip(predictions, predictions_index)
     ][: params["max_predictions"]]
 
@@ -93,6 +93,5 @@ def translate(sentence, params, tokenizer_source, tokenizer_target, transformer)
     predictions, attention = evaluate(
         sentence, params, tokenizer_source, tokenizer_target, transformer
     )
-    print("Input: {}".format(sentence))
-    print("predictions: {}".format(predictions))
+
     return predictions, attention

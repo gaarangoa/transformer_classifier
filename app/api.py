@@ -43,17 +43,6 @@ dff = params["dff"]
 dropout_rate = params["dropout_rate"]
 
 
-def rep_h(word):
-    if "@" in word:
-        return "[USUARIO]"
-    else:
-        return word
-
-
-def replace_identity(sentence):
-    return " ".join([rep_h(i) for i in sentence.split()])
-
-
 log.info("loading model ...")
 transformer, tokenizer_source, tokenizer_target = restore(params)
 log.info("model loaded")
@@ -74,9 +63,9 @@ def home():
             RETURN: {response: "...", status: 1} <br><br>
         
         <strong>EXAMPLE</strong> <br>
-        curl -X POST http://localhost:65431/predict/ -d'{"sentence": "hola, buenos dias"}' -H "Content-Type: application/json"
+        curl -X POST http://localhost:65431/predict/ -d'{"sentence": "hola, buenos dias", "max_predictions": 5, "attention": false, "layer": 4, "block": 1}' -H "Content-Type: application/json"
         <br><br>
-        gustavo1$ curl -X POST https://www.umayuxlabs.com/api/v1/chatbot/assistant/predict/ -d'{"sentence": "hola, buenos dias"}' -H "Content-Type: application/json"
+        curl -X POST http://localhost:65431/predict/ -d'{"sentence": "hola, buenos dias", "max_predictions": 5, "attention": false, "layer": 4, "block": 1}' -H "Content-Type: application/json"
         </p>
     """
 
@@ -85,10 +74,28 @@ def home():
 def predict():
     data = request.get_json()
     log.debug(data)
-    response, _ = translate(
+    params["max_predictions"] = data["max_predictions"]
+    params["attention"] = data["attention"]
+    params["layer"] = data["layer"]
+    params["block"] = data["block"]
+
+    response, attention = translate(
         data["sentence"], params, tokenizer_source, tokenizer_target, transformer
     )
-    return jsonify({"response": replace_identity(response)})
+
+    if params["attention"]:
+        return jsonify(
+            {
+                "response": response,
+                "attention": attention[
+                    "decoder_layer{}_block{}".format(params["layer"], params["block"])
+                ]
+                .numpy()
+                .tolist(),
+            }
+        )
+    else:
+        return jsonify({"response": response, "attention": []})
 
 
 if __name__ == "__main__":
