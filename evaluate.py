@@ -90,16 +90,20 @@ def evaluate(inp_sentence, params):
 
 
 def translate(sentence, params):
-    predictions, _ = evaluate(sentence, params)
+    predictions, weights = evaluate(sentence, params)
     print("Input: {}".format(sentence))
     print("predictions: {}".format(predictions))
+
+    return {"Input": sentence, "pred": predictions, weights: weights.numpy().tolist()}
 
 
 def get_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_file", type=str, required=False)
     parser.add_argument("--checkpoint_path", type=str, required=True)
-    parser.add_argument("--max_predictions", type=int, default=5, required=False)
+    parser.add_argument("--max_predictions", type=int,
+                        default=5, required=False)
+    parser.add_argument("--inline", type=bool, default=False, required=False)
 
     return parser
 
@@ -112,7 +116,17 @@ if __name__ == "__main__":
     params["max_predictions"] = args.max_predictions
     transformer, tokenizer_source, tokenizer_target = restore(params)
 
-    while 1:
-        sentence = input()
-        translate(sentence, params)
+    if args.inline:
+        while 1:
+            sentence = input()
+            translate(sentence, params)
 
+    results = []
+
+    for i in open(args.input_file):
+        text, label = i.strip().split('\t')
+        res = translate(text, params)
+        res['label'] = label
+        results.append(res)
+
+    json.dump(results, open(args.input_file+'.pred', 'w'))
