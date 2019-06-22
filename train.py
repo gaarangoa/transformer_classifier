@@ -1,6 +1,21 @@
+from sklearn.model_selection import train_test_split
+import json
+import os
+import time
+from sklearn.metrics import classification_report
+import pickle
+from utensor.masking import create_masks, create_masks_train
+from utensor.dataset import load_dataset
+from utensor.model import Transformer
+from utensor.dataset import Dataset
+from utensor.optimizer import CustomSchedule, loss_function
+import tensorflow as tf
+import tensorflow_datasets as tfds
 import argparse
 import logging
 import sys
+import numpy as np
+from sklearn.metrics import f1_score
 
 # file_handler = logging.FileHandler(filename="tmp.log")
 stdout_handler = logging.StreamHandler(sys.stdout)
@@ -16,36 +31,42 @@ logger = logging.getLogger()
 logger.info("start")
 
 
-import tensorflow_datasets as tfds
-import tensorflow as tf
-
-from utensor.optimizer import CustomSchedule, loss_function
-from utensor.dataset import Dataset
-from utensor.model import Transformer
-from utensor.dataset import load_dataset
-from utensor.masking import create_masks
-import pickle
-from sklearn.metrics import classification_report
-import time
-import os
-import json
-
 tf.keras.backend.clear_session()
 
 
 def test_acc(batch=32, test_dataset=[], transformer=[], test_accuracy=[], test_loss=[]):
+    real = []
+    pred = []
     for (batch, (inp, tar)) in enumerate(test_dataset):
         logger.debug("input: {}".format(inp.shape))
         logger.debug("target: {}".format(tar.shape))
 
         enc_padding_mask = create_masks(inp, tar)
 
-        predictions, _, _ = transformer(inp, tar, False, enc_padding_mask, None, None)
+        predictions, _, _ = transformer(
+            inp, tar, False, enc_padding_mask, None, None)
         logger.debug("predictions: {}".format(predictions.shape))
         logger.debug("tar_real: {}".format(tar.shape))
 
+        rand_samples = np.random.choice(
+            len(tar),
+            int(len(tar) * 0.9),
+            replace=False
+        )
+
+        tar = tf.Variable([tar[i] for i in rand_samples])
+        predictions = tf.Variable([predictions[i] for i in rand_samples])
+
+        real += tar.numpy().tolist()
+        pred += [i for i in np.argmax(predictions.numpy(), axis=1)]
+
         test_accuracy(tar, predictions)
         test_loss(loss_function(tar, predictions))
+
+    print(classification_report(real, pred))
+    F1 = f1_score(real, pred, average='macro')
+
+    return F1
 
 
 def train(args):
@@ -118,9 +139,11 @@ def train(args):
     logger.info("setup loss function")
     # setup loss
     train_loss = tf.keras.metrics.Mean(name="train_loss")
-    train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="train_accuracy")
+    train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(
+        name="train_accuracy")
 
-    test_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name="test_accuracy")
+    test_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(
+        name="test_accuracy")
     test_loss = tf.keras.metrics.Mean(name="test_loss")
 
     logger.info("Setup transformer model")
@@ -136,7 +159,8 @@ def train(args):
     )
 
     logger.info(
-        "input_vocab_size: {} classes: {}".format(input_vocab_size, target_vocab_size)
+        "input_vocab_size: {} classes: {}".format(
+            input_vocab_size, target_vocab_size)
     )
 
     # setup checkpoints
@@ -160,7 +184,7 @@ def train(args):
         logger.debug("input: {}".format(inp.shape))
         logger.debug("target: {}".format(tar.shape))
 
-        enc_padding_mask = create_masks(inp, tar)
+        enc_padding_mask = create_masks_train(inp, tar)
 
         logger.debug("enc_padding_mask: {}".format(enc_padding_mask.shape))
 
@@ -177,7 +201,8 @@ def train(args):
             loss = loss_function(tar, predictions)
 
         gradients = tape.gradient(loss, transformer.trainable_variables)
-        optimizer.apply_gradients(zip(gradients, transformer.trainable_variables))
+        optimizer.apply_gradients(
+            zip(gradients, transformer.trainable_variables))
 
         train_loss(loss)
         train_accuracy(tar, predictions)
@@ -191,14 +216,8 @@ def train(args):
         train_accuracy.reset_states()
 
         # inp -> portuguese, tar -> english
-        for (batch, (inp, tar)) in enumerate(train_dataset):
+        for (_, (inp, tar)) in enumerate(train_dataset):
             train_step(inp, tar)
-            if batch % 500 == 0:
-                print(
-                    "Epoch {} Batch {} Loss {:.4f} Accuracy {:.4f}".format(
-                        epoch + 1, batch, train_loss.result(), train_accuracy.result()
-                    )
-                )
 
         print(
             "Epoch {} Train Loss {:.4f} Accuracy {:.4f}".format(
@@ -209,7 +228,7 @@ def train(args):
         # Perform accuracy over the test dataset
         test_accuracy.reset_states()
         test_loss.reset_states()
-        test_acc(
+        test_f1_score = test_acc(
             batch=32,
             test_dataset=val_dataset,
             transformer=transformer,
@@ -218,17 +237,18 @@ def train(args):
         )
 
         print(
-            "Epoch {} Test Loss {:.4f} Accuracy {:.4f}".format(
-                epoch + 1, test_loss.result(), test_accuracy.result()
+            "Epoch {} Test Loss {:.4f} Accuracy {:.4f} F1 {:.4f}".format(
+                epoch + 1, test_loss.result(), test_accuracy.result(), test_f1_score
             )
         )
 
-        if best_test_acc < test_accuracy.result():
+        if best_test_acc < test_f1_score:
             ckpt_save_path = ckpt_manager.save()
             print(
-                "Saving checkpoint for epoch {} at {}".format(epoch + 1, ckpt_save_path)
+                "Saving checkpoint for epoch {} at {}".format(
+                    epoch + 1, ckpt_save_path)
             )
-            best_test_acc = test_accuracy.result()
+            best_test_acc = test_f1_score
 
         print("Time taken for 1 epoch: {} secs\n".format(time.time() - start))
 

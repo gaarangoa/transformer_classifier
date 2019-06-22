@@ -12,6 +12,9 @@ from sklearn.metrics import classification_report
 import time
 import os
 import json
+import pickle
+
+from tqdm import tqdm
 
 tf.keras.backend.clear_session()
 
@@ -90,11 +93,11 @@ def evaluate(inp_sentence, params):
 
 
 def translate(sentence, params):
-    predictions, weights = evaluate(sentence, params)
-    print("Input: {}".format(sentence))
-    print("predictions: {}".format(predictions))
+    predictions, w = evaluate(sentence, params)
+    # print("Input: {}".format(sentence))
+    # print("predictions: {}".format(predictions))
 
-    return {"Input": sentence, "pred": predictions, weights: weights.numpy().tolist()}
+    return {"Input": sentence, "pred": predictions, 'weight': w}
 
 
 def get_parser():
@@ -123,10 +126,10 @@ if __name__ == "__main__":
 
     results = []
 
-    for i in open(args.input_file):
+    for i in tqdm(open(args.input_file)):
         text, label = i.strip().split('\t')
         res = translate(text, params)
         res['label'] = label
         results.append(res)
 
-    json.dump(results, open(args.input_file+'.pred', 'w'))
+    pickle.dump(results, open(args.input_file+'.pred', 'wb'))
