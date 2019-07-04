@@ -37,14 +37,14 @@ tf.keras.backend.clear_session()
 def test_acc(batch=32, test_dataset=[], transformer=[], test_accuracy=[], test_loss=[]):
     real = []
     pred = []
-    for (batch, (inp, tar)) in enumerate(test_dataset):
+    for (batch, (inp, tar, bert_inp)) in enumerate(test_dataset):
         logger.debug("input: {}".format(inp.shape))
         logger.debug("target: {}".format(tar.shape))
 
         enc_padding_mask = create_masks(inp, tar)
 
         predictions, _, _ = transformer(
-            inp, tar, False, enc_padding_mask, None, None)
+            inp, tar, bert_inp, False, enc_padding_mask, None, None)
         logger.debug("predictions: {}".format(predictions.shape))
         logger.debug("tar_real: {}".format(tar.shape))
 
@@ -179,7 +179,7 @@ def train(args):
 
     # define training function step
     # @tf.function
-    def train_step(inp, tar):
+    def train_step(inp, tar, bert_inp):
 
         logger.debug("input: {}".format(inp.shape))
         logger.debug("target: {}".format(tar.shape))
@@ -190,7 +190,7 @@ def train(args):
 
         with tf.GradientTape() as tape:
             predictions, enc_output, _ = transformer(
-                inp, tar, True, enc_padding_mask, None, None
+                inp, tar, bert_inp, True, enc_padding_mask, None, None
             )
 
             logger.debug("predictions: {}".format(predictions.shape))
@@ -216,8 +216,8 @@ def train(args):
         train_accuracy.reset_states()
 
         # inp -> portuguese, tar -> english
-        for (_, (inp, tar)) in enumerate(train_dataset):
-            train_step(inp, tar)
+        for (_, (inp, tar, bert_inp)) in enumerate(train_dataset):
+            train_step(inp, tar, bert_inp)
 
         print(
             "Epoch {} Train Loss {:.4f} Accuracy {:.4f}".format(

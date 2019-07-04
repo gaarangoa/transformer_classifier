@@ -6,10 +6,28 @@ from .positional_encoding import positional_encoding
 def point_wise_feed_forward_network(d_model, dff):
     return tf.keras.Sequential(
         [
-            tf.keras.layers.Dense(dff, activation="relu"),  # (batch_size, seq_len, dff)
+            # (batch_size, seq_len, dff)
+            tf.keras.layers.Dense(dff, activation="relu"),
             tf.keras.layers.Dense(d_model),  # (batch_size, seq_len, d_model)
         ]
     )
+
+
+class SupportPreLayer(tf.keras.layers.Layer):
+    def __init__(self, units):
+        super(SupportPreLayer, self).__init__()
+
+        self.ffn_1 = tf.keras.layers.Dense(units)
+        self.ffn_2 = tf.keras.layers.Dense(128)
+        self.drop_1 = tf.keras.layers.Dropout(0.1)
+
+    def call(self, x):
+
+        out = self.ffn_1(x)
+        out = self.drop_1(out)
+        out = self.ffn_2(out)
+
+        return out
 
 
 class EncoderLayer(tf.keras.layers.Layer):
@@ -31,7 +49,8 @@ class EncoderLayer(tf.keras.layers.Layer):
             x, x, x, mask
         )  # (batch_size, input_seq_len, d_model)
         attn_output = self.dropout1(attn_output, training=training)
-        out1 = self.layernorm1(x + attn_output)  # (batch_size, input_seq_len, d_model)
+        # (batch_size, input_seq_len, d_model)
+        out1 = self.layernorm1(x + attn_output)
 
         ffn_output = self.ffn(out1)  # (batch_size, input_seq_len, d_model)
         ffn_output = self.dropout2(ffn_output, training=training)

@@ -13,6 +13,7 @@ import time
 import os
 import json
 import pickle
+import numpy as np
 
 from tqdm import tqdm
 
@@ -61,7 +62,7 @@ def restore(params):
     return transformer, tokenizer_source, tokenizer_target
 
 
-def evaluate(inp_sentence, params):
+def evaluate(inp_sentence, bert_input, params):
     start_token = [tokenizer_source.vocab_size]
     end_token = [tokenizer_source.vocab_size + 1]
 
@@ -74,7 +75,7 @@ def evaluate(inp_sentence, params):
 
     # predictions.shape == (batch_size, seq_len, vocab_size)
     predictions, _, attention_weights = transformer(
-        inp, None, False, enc_padding_mask, None, None
+        inp, None, bert_input, False, enc_padding_mask, None, None
     )
 
     predictions = tf.squeeze(predictions, axis=0)
@@ -92,8 +93,8 @@ def evaluate(inp_sentence, params):
     return _pred, attention_weights
 
 
-def translate(sentence, params):
-    predictions, w = evaluate(sentence, params)
+def translate(sentence, bert_input, params):
+    predictions, w = evaluate(sentence, bert_input, params)
     # print("Input: {}".format(sentence))
     # print("predictions: {}".format(predictions))
 
@@ -122,13 +123,14 @@ if __name__ == "__main__":
     if args.inline:
         while 1:
             sentence = input()
-            translate(sentence, params)
+            translate(sentence, [],  params)
 
     results = []
 
     for i in tqdm(open(args.input_file)):
-        text, label = i.strip().split('\t')
-        res = translate(text, params)
+        text, bert_input, label = i.strip().split('\t')
+        bert_input = tf.Variable([[float(i) for i in bert_input.split(',')]])
+        res = translate(text, bert_input, params)
         res['label'] = label
         results.append(res)
 
