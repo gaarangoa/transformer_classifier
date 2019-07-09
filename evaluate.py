@@ -50,8 +50,8 @@ def restore(params):
 
     # if a checkpoint exists, restore the latest checkpoint.
     if ckpt_manager.latest_checkpoint:
-        ckpt.restore(ckpt_manager.latest_checkpoint)
-        print("Latest checkpoint restored!!")
+        status = ckpt.restore(ckpt_manager.latest_checkpoint).expect_partial()
+        print("Latest checkpoint restored!!", status)
     else:
         print("Initializing from scratch.")
 
@@ -91,10 +91,7 @@ def evaluate(inp_sentence, params):
 
 def translate(sentence, params):
     predictions, weights = evaluate(sentence, params)
-    print("Input: {}".format(sentence))
-    print("predictions: {}".format(predictions))
-
-    return {"Input": sentence, "pred": predictions, weights: weights.numpy().tolist()}
+    return {"Input": sentence, "pred": predictions, 'weights': weights}
 
 
 def get_parser():
@@ -129,4 +126,4 @@ if __name__ == "__main__":
         res['label'] = label
         results.append(res)
 
-    json.dump(results, open(args.input_file+'.pred', 'w'))
+    pickle.dump(results, open(args.input_file+'.pred', 'wb'))

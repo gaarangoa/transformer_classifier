@@ -7,7 +7,9 @@ import random
 import argparse
 import pickle
 
-# Converts the unicode file to ascii
+# Converts the unicode file to ascii - not currently used
+
+
 def unicode_to_ascii(s):
     return "".join(
         c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn"
@@ -15,12 +17,17 @@ def unicode_to_ascii(s):
 
 
 def preprocess_sentence(w):
-    return w
+
     w = unicode_to_ascii(w.lower().strip())
 
     # creating a space between a word and the punctuation following it
     # eg: "he is a boy." => "he is a boy ."
     # Reference:- https://stackoverflow.com/questions/3645931/python-padding-punctuation-with-white-spaces-keeping-punctuation
+
+    # remove user mentions and hashtags from tweets
+    # w = ' '.join(
+    #     re.sub("(@[A-Za-z0-9]+)|([^0-9A-Za-z \t])|(\w+:\/\/\S+)", " ", w).split())
+
     w = re.sub(r"([?.!,¿])", r" \1 ", w)
     w = re.sub(r'[" "]+', " ", w)
 
@@ -113,7 +120,8 @@ class Dataset:
     def tokenizer(self, train_examples):
         self.tokenizer_source = tfds.features.text.SubwordTextEncoder.build_from_corpus(
             (
-                preprocess_sentence(pt.numpy().decode("UTF-8").split("\t")[0]).encode()
+                preprocess_sentence(pt.numpy().decode(
+                    "UTF-8").split("\t")[0]).encode()
                 for pt in train_examples
             ),
             target_vocab_size=self.vocabulary_size,
@@ -164,7 +172,8 @@ def load_dataset(params={}):
     retrain = params["retrain"]
 
     # Build the dataset for training validation
-    dataset = Dataset(filename=dataset_file, vocab_dim=vocab_dim, max_length=MAX_LENGTH)
+    dataset = Dataset(filename=dataset_file,
+                      vocab_dim=vocab_dim, max_length=MAX_LENGTH)
     dataset.build_train_test(test=test_partition)
     train_examples, val_examples = dataset.format_train_test()
     full_dataset = dataset.format_dataset()

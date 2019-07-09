@@ -20,8 +20,10 @@ class Transformer(tf.keras.Model):
         )
 
         self.flatten = tf.keras.layers.Flatten()
-        self.final_layer = tf.keras.layers.Dense(target_vocab_size)
-        self.dense_1 = tf.keras.layers.Dense(target_vocab_size, activation="softmax")
+        self.final_layer = tf.keras.layers.Dense(
+            128)
+        self.dense_1 = tf.keras.layers.Dense(
+            target_vocab_size, activation="softmax")
         # self.out = tf.nn.softmax(target_vocab_size)
 
     def call(
@@ -36,7 +38,7 @@ class Transformer(tf.keras.Model):
             enc_output
         )  # (batch_size, tar_seq_len, target_vocab_size)
 
-        predictions = self.flatten(predictions)
-        predictions = self.dense_1(predictions)
+        embeddings = self.flatten(predictions)
+        predictions = self.dense_1(embeddings)
 
-        return predictions, enc_output, attention_weights
+        return predictions, embeddings, attention_weights

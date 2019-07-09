@@ -6,7 +6,8 @@ from .positional_encoding import positional_encoding
 def point_wise_feed_forward_network(d_model, dff):
     return tf.keras.Sequential(
         [
-            tf.keras.layers.Dense(dff, activation="relu"),  # (batch_size, seq_len, dff)
+            # (batch_size, seq_len, dff)
+            tf.keras.layers.Dense(dff, activation="relu"),
             tf.keras.layers.Dense(d_model),  # (batch_size, seq_len, d_model)
         ]
     )
@@ -31,7 +32,8 @@ class EncoderLayer(tf.keras.layers.Layer):
             x, x, x, mask
         )  # (batch_size, input_seq_len, d_model)
         attn_output = self.dropout1(attn_output, training=training)
-        out1 = self.layernorm1(x + attn_output)  # (batch_size, input_seq_len, d_model)
+        # (batch_size, input_seq_len, d_model)
+        out1 = self.layernorm1(x + attn_output)
 
         ffn_output = self.ffn(out1)  # (batch_size, input_seq_len, d_model)
         ffn_output = self.dropout2(ffn_output, training=training)
